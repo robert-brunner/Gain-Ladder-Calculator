@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Gain Ladder — Resistor Network Calculator</title>
+<style>
+  :root{
+    --bg:#14171c;
+    --panel:#1b1f26;
+    --panel-2:#20252d;
+    --grid:#2a3038;
+    --trace:#7fdb6a;
+    --trace-dim:#3f6c37;
+    --ideal:#ffb454;
+    --text:#dfe4ea;
+    --text-dim:#8b93a0;
+    --accent:#57b8ff;
+    --off:#3a4048;
+    --on:#57b8ff;
+    --warn:#ff6a5c;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+    padding:24px;
+  }
+  .mono{font-family:'Consolas','SF Mono',monospace;}
+  h1{
+    font-size:15px;
+    letter-spacing:2px;
+    text-transform:uppercase;
+    color:var(--text-dim);
+    margin:0 0 2px 0;
+    font-weight:600;
+  }
+  .subtitle{
+    font-size:12px;
+    color:var(--text-dim);
+    margin-bottom:20px;
+  }
+  .wrap{max-width:980px;margin:0 auto;}
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--grid);
+    border-radius:6px;
+    padding:18px 20px;
+    margin-bottom:16px;
+  }
+  .panel-title{
+    font-size:11px;
+    letter-spacing:1.5px;
+    text-transform:uppercase;
+    color:var(--text-dim);
+    margin-bottom:14px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+  }
+  .series-row{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:16px;
+    padding-bottom:16px;
+    border-bottom:1px solid var(--grid);
+  }
+  .series-row label{font-size:12px;color:var(--text-dim);min-width:110px;}
+  .series-row input{width:100px;}
+
+  .ladder{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+  }
+  .resnode{
+    flex:1;
+    min-width:150px;
+    background:var(--panel-2);
+    border:1px solid var(--grid);
+    border-radius:5px;
+    padding:12px;
+    transition:border-color .15s, box-shadow .15s;
+  }
+  .resnode.on{
+    border-color:var(--on);
+    box-shadow:0 0 0 1px var(--on) inset, 0 0 12px -4px var(--on);
+  }
+  .resnode-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:8px;
+  }
+  .resnode-name{font-size:12px;font-weight:600;color:var(--text);}
+  .resnode-bit{font-size:10px;color:var(--text-dim);}
+
+  .toggle{
+    width:38px;height:20px;
+    border-radius:10px;
+    background:var(--off);
+    position:relative;
+    cursor:pointer;
+    border:none;
+    transition:background .15s;
+    flex-shrink:0;
+  }
+  .toggle.on{background:var(--on);}
+  .toggle::after{
+    content:'';
+    position:absolute;
+    top:2px;left:2px;
+    width:16px;height:16px;
+    border-radius:50%;
+    background:#fff;
+    transition:left .15s;
+  }
+  .toggle.on::after{left:20px;}
+
+  .resnode input[type=number]{
+    width:100%;
+    margin-top:4px;
+    font-size:13px;
+  }
+  .resnode-unit{font-size:10px;color:var(--text-dim);margin-left:4px;}
+
+  input[type=number], input[type=text]{
+    background:#11141a;
+    border:1px solid var(--grid);
+    color:var(--text);
+    padding:6px 8px;
+    border-radius:4px;
+    font-family:'Consolas','SF Mono',monospace;
+    font-size:12px;
+  }
+  input[type=number]:focus, input[type=text]:focus{
+    outline:none;
+    border-color:var(--accent);
+  }
+
+  .readout-row{
+    display:flex;
+    gap:16px;
+    align-items:stretch;
+    margin-top:16px;
+  }
+  .readout-box{
+    background:var(--panel-2);
+    border:1px solid var(--grid);
+    border-radius:5px;
+    padding:14px 18px;
+    flex:1;
+    text-align:center;
+  }
+  .readout-label{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--text-dim);margin-bottom:4px;}
+  .readout-value{font-size:24px;font-weight:700;font-family:'Consolas','SF Mono',monospace;color:var(--trace);}
+  .readout-value.small{font-size:16px;color:var(--text);}
+
+  .gauge{
+    position:relative;
+    height:34px;
+    background:#11141a;
+    border:1px solid var(--grid);
+    border-radius:4px;
+    margin-top:16px;
+    overflow:hidden;
+  }
+  .gauge-center-line{
+    position:absolute;
+    top:0;bottom:0;left:50%;
+    width:1px;
+    background:var(--text-dim);
+  }
+  .gauge-fill{
+    position:absolute;
+    top:4px;bottom:4px;
+    background:var(--trace);
+    border-radius:2px;
+    transition:left .1s, width .1s;
+  }
+  .gauge-labels{
+    display:flex;justify-content:space-between;
+    font-size:10px;color:var(--text-dim);margin-top:4px;
+  }
+
+  svg{display:block;width:100%;height:auto;}
+  .axis-line{stroke:var(--grid);stroke-width:1;}
+  .grid-line{stroke:var(--grid);stroke-width:1;stroke-dasharray:2,3;}
+  .ideal-line{stroke:var(--ideal);stroke-width:1.5;stroke-dasharray:4,3;fill:none;}
+  .actual-line{stroke:var(--trace);stroke-width:2;fill:none;}
+  .actual-dot{fill:var(--trace);}
+  .cursor-dot{fill:var(--accent);stroke:#fff;stroke-width:1.5;}
+  .axis-text{fill:var(--text-dim);font-size:10px;font-family:'Consolas','SF Mono',monospace;}
+
+  .legend{display:flex;gap:20px;font-size:11px;color:var(--text-dim);margin-top:8px;}
+  .legend-item{display:flex;align-items:center;gap:6px;}
+  .legend-swatch{width:16px;height:2px;}
+
+  table{width:100%;border-collapse:collapse;font-family:'Consolas','SF Mono',monospace;font-size:11px;}
+  th{
+    text-align:right;
+    color:var(--text-dim);
+    font-weight:500;
+    text-transform:uppercase;
+    font-size:9px;
+    letter-spacing:0.5px;
+    padding:6px 8px;
+    border-bottom:1px solid var(--grid);
+  }
+  td{
+    text-align:right;
+    padding:4px 8px;
+    border-bottom:1px solid #232833;
+    color:var(--text);
+  }
+  tr.current{background:rgba(87,184,255,0.12);}
+  tr:hover{background:rgba(255,255,255,0.03);}
+  th:first-child, td:first-child{text-align:left;}
+
+  .toggle-table-btn{
+    background:none;
+    border:1px solid var(--grid);
+    color:var(--text-dim);
+    font-size:11px;
+    padding:5px 10px;
+    border-radius:4px;
+    cursor:pointer;
+  }
+  .toggle-table-btn:hover{border-color:var(--accent);color:var(--text);}
+  #tableWrap{max-height:340px;overflow-y:auto;margin-top:10px;display:none;}
+  #tableWrap.show{display:block;}
+
+  .warn-badge{
+    color:var(--warn);
+    font-size:11px;
+    margin-left:8px;
+  }
+
+  .modal-overlay{
+    display:none;
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,0.6);
+    z-index:100;
+    align-items:flex-start;
+    justify-content:center;
+    padding:40px 20px;
+    overflow-y:auto;
+  }
+  .modal-overlay.show{display:flex;}
+  .modal-box{
+    background:var(--panel);
+    border:1px solid var(--grid);
+    border-radius:8px;
+    max-width:760px;
+    width:100%;
+    padding:0;
+    max-height:88vh;
+    display:flex;
+    flex-direction:column;
+  }
+  .modal-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:16px 22px;
+    border-bottom:1px solid var(--grid);
+    flex-shrink:0;
+  }
+  .modal-header h2{font-size:14px;margin:0;letter-spacing:0.5px;color:var(--text);}
+  .modal-close{
+    background:none;border:none;color:var(--text-dim);
+    font-size:20px;cursor:pointer;line-height:1;padding:2px 6px;
+  }
+  .modal-close:hover{color:var(--text);}
+  .modal-body{
+    padding:20px 22px 26px;
+    overflow-y:auto;
+    font-size:13px;
+    line-height:1.6;
+    color:var(--text);
+  }
+  .modal-body h3{
+    font-size:12px;
+    text-transform:uppercase;
+    letter-spacing:1px;
+    color:var(--accent);
+    margin:22px 0 8px;
+  }
+  .modal-body h3:first-child{margin-top:0;}
+  .modal-body p{margin:0 0 10px;color:var(--text);}
+  .modal-body ul, .modal-body ol{margin:0 0 10px;padding-left:20px;}
+  .modal-body li{margin-bottom:4px;}
+  .modal-body code{
+    background:#11141a;border:1px solid var(--grid);
+    border-radius:3px;padding:1px 5px;
+    font-family:'Consolas','SF Mono',monospace;font-size:12px;color:var(--trace);
+  }
+  .modal-body pre{
+    background:#11141a;border:1px solid var(--grid);border-radius:5px;
+    padding:10px 12px;overflow-x:auto;font-size:11.5px;
+    font-family:'Consolas','SF Mono',monospace;color:var(--text-dim);
+  }
+  .modal-body table{margin:8px 0 14px;}
+  .modal-body th, .modal-body td{text-align:left;}
+  .modal-body .stat-line{
+    display:flex;justify-content:space-between;
+    padding:6px 10px;background:var(--panel-2);
+    border:1px solid var(--grid);border-radius:4px;margin-bottom:4px;
+    font-family:'Consolas','SF Mono',monospace;font-size:12px;
+  }
+  .modal-body .stat-line span:first-child{color:var(--text-dim);}
+  .modal-body img{
+    width:100%;border-radius:5px;border:1px solid var(--grid);margin:6px 0 14px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+    <div>
+      <h1>Gain Ladder Calculator</h1>
+      <div class="subtitle">Series R + 5-bit binary-weighted parallel network → gain vs digital code. Toggle resistors, edit values, watch the curve.</div>
+    </div>
+    <button id="helpBtn" style="background:var(--panel-2);border:1px solid var(--grid);color:var(--text);font-size:12px;padding:7px 14px;border-radius:5px;cursor:pointer;white-space:nowrap;">? Help</button>
+  </div>
+  <div class="panel">
+    <div class="panel-title">Network Configuration</div>
+    <div class="series-row">
+      <label>Series resistor</label>
+      <input type="number" id="rSeries" value="1800" step="10">
+      <span class="resnode-unit">Ω</span>
+    </div>
+    <div class="ladder" id="ladder"></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Live Readout — click resistors above to toggle, or drag the code slider</div>
+    <input type="range" id="codeSlider" min="0" max="31" value="0" style="width:100%">
+    <div class="gauge-labels">
+      <span>CODE 0</span><span id="codeLabel" class="mono">code = 0</span><span>CODE 31</span>
+    </div>
+    <div class="readout-row">
+      <div class="readout-box">
+        <div class="readout-label">Gain (ratio)</div>
+        <div class="readout-value" id="gainVal">0.000</div>
+      </div>
+      <div class="readout-box">
+        <div class="readout-label">Relative to nominal</div>
+        <div class="readout-value" id="gainPct">0.0%</div>
+      </div>
+      <div class="readout-box">
+        <div class="readout-label">Hardware state</div>
+        <div class="readout-value small mono" id="hwState">00000</div>
+      </div>
+    </div>
+    <div class="gauge">
+      <div class="gauge-center-line"></div>
+      <div class="gauge-fill" id="gaugeFill"></div>
+    </div>
+    <div class="gauge-labels"><span>-30%</span><span>nominal</span><span>+30%</span></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">
+      <span>Full Sweep — linearity check (all 32 codes)</span>
+      <button class="toggle-table-btn" id="tableToggle">Show table</button>
+    </div>
+    <svg id="chart" viewBox="0 0 900 320"></svg>
+    <div class="legend">
+      <div class="legend-item"><div class="legend-swatch" style="background:var(--trace)"></div>Actual gain</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:var(--ideal);border-top:1px dashed var(--ideal)"></div>Ideal straight line (min→max)</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:var(--accent)"></div>Selected code</div>
+    </div>
+    <div class="readout-row" style="margin-top:14px;">
+      <div class="readout-box">
+        <div class="readout-label">Min gain (all closed)</div>
+        <div class="readout-value small mono" id="minGain">-</div>
+      </div>
+      <div class="readout-box">
+        <div class="readout-label">Max gain (all open)</div>
+        <div class="readout-value small mono" id="maxGain">-</div>
+      </div>
+      <div class="readout-box">
+        <div class="readout-label">Nominal / span</div>
+        <div class="readout-value small mono" id="nomSpan">-</div>
+      </div>
+      <div class="readout-box">
+        <div class="readout-label">Max linearity error<span id="errWarn"></span></div>
+        <div class="readout-value small mono" id="linErr">-</div>
+      </div>
+    </div>
+    <div id="tableWrap">
+      <table>
+        <thead><tr><th>Code</th><th>HW State</th><th>Gain</th><th>Rel %</th><th>Ideal %</th><th>Error (pts)</th></tr></thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">
+      <span>Firmware Precision Table — tiltGainRange (decV −32…+32, 65 codes)</span>
+    </div>
+    <div class="subtitle" style="margin-bottom:12px;">
+      This is your exact hex/bin/decV array. For each target, this brute-force searches all 32 achievable resistor
+      states and picks the closest one — the assignment is mathematically guaranteed monotonic (no 15/16-style
+      reversals possible), because the 32 achievable gains are themselves strictly monotonic in hardware state.
+    </div>
+    <div class="readout-row">
+      <div class="readout-box">
+        <div class="readout-label">Achievable span</div>
+        <div class="readout-value small mono" id="fwSpan">-</div>
+      </div>
+      <div class="readout-box">
+        <div class="readout-label">Target span (fixed)</div>
+        <div class="readout-value small mono">±32.00%</div>
+      </div>
+      <div class="readout-box">
+        <div class="readout-label">Worst-case error</div>
+        <div class="readout-value small mono" id="fwWorstErr">-</div>
+      </div>
+      <div class="readout-box">
+        <div class="readout-label">Unique states used</div>
+        <div class="readout-value small mono" id="fwUniqueStates">-</div>
+      </div>
+    </div>
+    <div id="fwCoverageWarn" class="subtitle" style="color:var(--warn);margin-top:10px;display:none;"></div>
+    <div style="max-height:480px;overflow-y:auto;margin-top:14px;">
+      <table>
+        <thead>
+          <tr>
+            <th>decV</th><th>Hex</th><th>Bin (fw)</th><th>HW State</th><th>Grounded resistors</th>
+            <th>Target %</th><th>Actual %</th><th>Actual Vout/Vin</th><th>Error (pp)</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="fwTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="helpModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h2>GAIN LADDER CALCULATOR — HELP</h2>
+      <button class="modal-close" id="helpClose">&times;</button>
+    </div>
+    <div class="modal-body">
+
+      <h3>What this is</h3>
+      <p>Live calculator for the binary-weighted resistor ladder gain-control network — a series resistor feeding a
+      junction where five resistors can each be independently switched to ground. Whichever combination is grounded
+      sets the divider ratio, which sets the gain. Also generates the firmware lookup table (<code>tiltGainRange</code>,
+      65 codes) mapped onto the closest achievable hardware state.</p>
+
+      <h3>The circuit</h3>
+      <p><code>IN</code> drives the op-amp's <code>+</code> input. <code>OUT</code> feeds back into <code>&minus;</code>
+      and also drives <code>R_SERIES</code> down to a junction. Five resistors (<code>R176, R171, R170, R169, R168</code>)
+      hang off that junction, each with a switch to ground. A resistor switched on contributes its conductance
+      (<code>1/R</code>) to the parallel combination; switched off, it contributes nothing.</p>
+      <p>5 independent switches = <strong>2⁵ = 32 possible combinations</strong>, each one discrete gain value. That's
+      the hard ceiling on resolution — no firmware or math changes it, it's set by the resistor count.</p>
+
+      <h3>The math</h3>
+      <pre>1/R_parallel = Σ (1/R_i) for every grounded resistor i
+R_parallel   = 1 / (1/R_parallel)          [∞ if nothing is grounded]
+Gain         = R_parallel / (R_SERIES + R_parallel)
+
+Nominal gain   = midpoint of min & max achievable gain
+Relative % = (Gain − Nominal) / Nominal × 100</pre>
+      <p>All grounded → smallest R_parallel → minimum gain. All open → R_parallel = ∞ → maximum gain (1.0). Gain rises
+      monotonically as fewer resistors are grounded, so the firmware table's nearest-match search can never produce an
+      out-of-order jump — a correct search is mathematically incapable of that.</p>
+
+      <h3>The firmware table (tiltGainRange)</h3>
+      <p>The firmware expects 65 codes (<code>decV</code> −32…+32, hex <code>0x00</code>–<code>0x40</code>). For each
+      one, the tool computes the target gain (<code>nominal × (1 + decV/100)</code>) and searches all 32 achievable
+      states for the closest match — reporting hardware state, actual %, and error in percentage points (pp).</p>
+
+      <h3>Two different "error" numbers — don't mix them up</h3>
+      <p>The tool reports linearity/error in two places measuring <strong>different things</strong>:</p>
+      <p><strong>Full Sweep panel</strong> — raw achievable gain across the 32 physical codes (0–31) vs. a straight
+      line from code 0 to code 31. Nothing to do with firmware. The gain formula is a divider, not linear in the
+      switch bits, so this will always show real curvature (currently <strong>&minus;9.32 pts</strong> at R_SERIES=1800Ω)
+      — that's the network's inherent shape, not a bug.</p>
+      <p><strong>Firmware Precision Table panel</strong> — each of the 65 <code>decV</code> targets vs. nearest
+      achievable state, in relative %. This is the number that matters for firmware accuracy (currently
+      <strong>+1.78 pp</strong> worst-case at R_SERIES=1800Ω).</p>
+      <p>These won't match each other — different axes, different reference lines, different code counts. If a
+      number gets quoted, check which panel it came from.</p>
+
+      <h3>Reading the error rate</h3>
+      <p>65 requested firmware codes can't map onto 32 achievable states one-to-one:</p>
+      <ul>
+        <li><strong>Quantization (expected)</strong> — adjacent codes closer together than the real gain spacing land
+        on the same state. Flagged with a faint highlight and a <code>↔</code> icon. Normal for a 5-bit network.</li>
+        <li><strong>Coverage gap (a real design number)</strong> — if the achievable span is narrower than ±32%, the
+        outer codes clamp to the best available end-state and error grows there. Watch "Achievable span" and
+        "Worst-case error" in the Firmware Precision Table — both update live as resistor values change.</li>
+      </ul>
+      <p>Current configuration (R_SERIES = 1800Ω):</p>
+      <div class="stat-line"><span>Full Sweep — max linearity error (vs. straight line, 32 codes)</span><span>&minus;9.32 pts</span></div>
+      <div class="stat-line"><span>Firmware table — target span</span><span>±32.00%</span></div>
+      <div class="stat-line"><span>Firmware table — achieved span</span><span>±30.22%</span></div>
+      <div class="stat-line"><span>Firmware table — worst-case error</span><span>+1.78 pp</span></div>
+      <div class="stat-line"><span>Firmware table — mean absolute error (65 codes)</span><span>0.59 pp</span></div>
+      <p>1800Ω closes most of the gap that 1500Ω/1650Ω left open on the firmware-facing number. If it still needs
+      closing further, either keep tuning resistor values here (everything updates live), add a 6th switched
+      resistor for wider span and finer resolution, or move to a real digital potentiometer if every one of the 65
+      codes needs a unique value with no duplicates.</p>
+
+      <h3>Using the panels</h3>
+      <ol>
+        <li><strong>Network Configuration</strong> — edit R_SERIES and the five resistor values. Toggle switches to
+        explore any single state manually; the code slider steps through all 32.</li>
+        <li><strong>Full Sweep</strong> — all 32 raw states against an ideal straight line, for checking linearity
+        independent of the firmware's specific 65-code target.</li>
+        <li><strong>Firmware Precision Table</strong> — matches the <code>tiltGainRange</code> array exactly, shows
+        nearest-match hardware state, grounded resistors, and error for every one of the 65 codes.</li>
+      </ol>
+      <p>Everything recomputes live. No reload, no recalculate button.</p>
+
+    </div>
+  </div>
+</div>
+
+<script>
+
+//Created by Robert Brunner
+const RES_LABELS = ['R176','R171','R170','R169','R168'];
+const RES_DEFAULTS = [4020, 8060, 16200, 32400, 63400];
+// bit 4 = R176 (highest weight / lowest resistance) ... bit 0 = R168 (lowest weight / highest resistance)
+
+let resistorValues = [...RES_DEFAULTS];
+let resistorOn = [false,false,false,false,false]; // true = switched into circuit (to ground)
+
+const ladderEl = document.getElementById('ladder');
+const rSeriesInput = document.getElementById('rSeries');
+const codeSlider = document.getElementById('codeSlider');
+
+function buildLadderUI(){
+  ladderEl.innerHTML = '';
+  RES_LABELS.forEach((name, i) => {
+    const node = document.createElement('div');
+    node.className = 'resnode';
+    node.innerHTML = `
+      <div class="resnode-head">
+        <span class="resnode-name">${name}</span>
+        <span class="resnode-bit">bit ${4-i}</span>
+      </div>
+      <button class="toggle" data-idx="${i}"></button>
+      <input type="number" data-val-idx="${i}" value="${resistorValues[i]}" step="10" style="margin-top:10px;">
+      <span class="resnode-unit">Ω</span>
+    `;
+    ladderEl.appendChild(node);
+  });
+
+  ladderEl.querySelectorAll('.toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = +btn.dataset.idx;
+      resistorOn[idx] = !resistorOn[idx];
+      syncFromToggles();
+      renderAll();
+    });
+  });
+  ladderEl.querySelectorAll('input[type=number][data-val-idx]').forEach(inp => {
+    inp.addEventListener('input', () => {
+      const idx = +inp.dataset.valIdx;
+      const v = parseFloat(inp.value);
+      if(!isNaN(v) && v > 0) resistorValues[idx] = v;
+      renderAll();
+    });
+  });
+}
+
+// hw_state: bit i (0=R176..4=R168 reversed) - build integer from resistorOn where bit index matches "weight"
+// weight order per RES_LABELS: index0=highest weight(bit4) ... index4=lowest weight(bit0)
+function hwStateFromToggles(){
+  let s = 0;
+  for(let i=0;i<5;i++){
+    const bitPos = 4-i; // R176->bit4 ... R168->bit0
+    if(resistorOn[i]) s |= (1<<bitPos);
+  }
+  return s;
+}
+function togglesFromHwState(hw){
+  for(let i=0;i<5;i++){
+    const bitPos = 4-i;
+    resistorOn[i] = !!((hw>>bitPos)&1);
+  }
+}
+function syncFromToggles(){
+  const hw = hwStateFromToggles();
+  const inputVal = 31 - hw;
+  codeSlider.value = inputVal;
+}
+
+function computeGain(hwState, rSeries, rParallel){
+  let invReq = 0;
+  for(let i=0;i<5;i++){
+    const bitPos = 4-i;
+    if((hwState>>bitPos)&1) invReq += 1/rParallel[i];
+  }
+  if(invReq > 0){
+    const req = 1/invReq;
+    return req/(rSeries+req);
+  }
+  return 1.0;
+}
+
+function fullSweep(){
+  const rSeries = parseFloat(rSeriesInput.value) || 1500;
+  const rows = [];
+  for(let inputVal=0; inputVal<32; inputVal++){
+    const hw = 31 - inputVal;
+    const gain = computeGain(hw, rSeries, resistorValues);
+    rows.push({inputVal, hw, gain});
+  }
+  return rows;
+}
+
+function renderAll(){
+  const rSeries = parseFloat(rSeriesInput.value) || 1500;
+  const rows = fullSweep();
+  const minGain = rows[0].gain;
+  const maxGain = rows[31].gain;
+  const nominal = (minGain+maxGain)/2;
+  const spanPct = ((maxGain-minGain)/nominal)*100;
+
+  // current selection (from slider, which drives hw state / toggles)
+  const inputVal = +codeSlider.value;
+  const hw = 31 - inputVal;
+  togglesFromHwState(hw);
+  const curGain = computeGain(hw, rSeries, resistorValues);
+  const curPct = ((curGain-nominal)/nominal)*100;
+
+  // update toggle UI + on-state highlighting
+  ladderEl.querySelectorAll('.toggle').forEach(btn=>{
+    const idx = +btn.dataset.idx;
+    btn.classList.toggle('on', resistorOn[idx]);
+    btn.closest('.resnode').classList.toggle('on', resistorOn[idx]);
+  });
+
+  document.getElementById('codeLabel').textContent = `code = ${inputVal}`;
+  document.getElementById('gainVal').textContent = curGain.toFixed(4);
+  document.getElementById('gainPct').textContent = (curPct>=0?'+':'') + curPct.toFixed(1) + '%';
+  document.getElementById('hwState').textContent = hw.toString(2).padStart(5,'0');
+  document.getElementById('minGain').textContent = minGain.toFixed(4);
+  document.getElementById('maxGain').textContent = maxGain.toFixed(4);
+  document.getElementById('nomSpan').textContent = nominal.toFixed(4) + ' / ±' + (spanPct/2).toFixed(1) + '%';
+
+  // gauge: map curPct from -35..+35 (a bit wider than target ±30) to 0-100%
+  const gaugeMin = -35, gaugeMax = 35;
+  const clamped = Math.max(gaugeMin, Math.min(gaugeMax, curPct));
+  const pctPos = ((clamped-gaugeMin)/(gaugeMax-gaugeMin))*100;
+  const zeroPos = ((0-gaugeMin)/(gaugeMax-gaugeMin))*100;
+  const fill = document.getElementById('gaugeFill');
+  if(pctPos >= zeroPos){
+    fill.style.left = zeroPos+'%';
+    fill.style.width = (pctPos-zeroPos)+'%';
+  } else {
+    fill.style.left = pctPos+'%';
+    fill.style.width = (zeroPos-pctPos)+'%';
+  }
+
+  // linearity error: compare rel% at each code to ideal straight line from code0(-span/2) to code31(+span/2)
+  let maxErr = 0;
+  const errRows = rows.map(r=>{
+    const relPct = ((r.gain-nominal)/nominal)*100;
+    const idealPct = -spanPct/2 + (spanPct)*(r.inputVal/31);
+    const err = relPct - idealPct;
+    if(Math.abs(err) > Math.abs(maxErr)) maxErr = err;
+    return {...r, relPct, idealPct, err};
+  });
+  document.getElementById('linErr').textContent = (maxErr>=0?'+':'') + maxErr.toFixed(2) + ' pts';
+  document.getElementById('errWarn').innerHTML = Math.abs(maxErr) > 3 ? '<span class="warn-badge">⚠</span>' : '';
+
+  drawChart(errRows, inputVal);
+  drawTable(errRows, inputVal);
+  renderFirmwareTable();
+}
+
+function drawChart(rows, currentCode){
+  const svg = document.getElementById('chart');
+  const W=900,H=320,padL=50,padR=20,padT=20,padB=30;
+  const plotW=W-padL-padR, plotH=H-padT-padB;
+
+  const allVals = rows.flatMap(r=>[r.relPct, r.idealPct]);
+  let yMin = Math.min(...allVals), yMax = Math.max(...allVals);
+  const pad = (yMax-yMin)*0.1 || 5;
+  yMin -= pad; yMax += pad;
+
+  const x = code => padL + (code/31)*plotW;
+  const y = val => padT + (1-(val-yMin)/(yMax-yMin))*plotH;
+
+  let svgContent = '';
+
+  // grid + axes
+  for(let g=0; g<=4; g++){
+    const val = yMin + (yMax-yMin)*(g/4);
+    const yy = y(val);
+    svgContent += `<line class="grid-line" x1="${padL}" y1="${yy}" x2="${W-padR}" y2="${yy}"/>`;
+    svgContent += `<text class="axis-text" x="${padL-6}" y="${yy+3}" text-anchor="end">${val.toFixed(0)}%</text>`;
+  }
+  for(let c=0; c<=31; c+=5){
+    const xx = x(c);
+    svgContent += `<text class="axis-text" x="${xx}" y="${H-padB+16}" text-anchor="middle">${c}</text>`;
+  }
+  svgContent += `<line class="axis-line" x1="${padL}" y1="${padT}" x2="${padL}" y2="${H-padB}"/>`;
+  svgContent += `<line class="axis-line" x1="${padL}" y1="${H-padB}" x2="${W-padR}" y2="${H-padB}"/>`;
+
+  // ideal line
+  let idealPath = rows.map((r,i)=> `${i===0?'M':'L'} ${x(r.inputVal)} ${y(r.idealPct)}`).join(' ');
+  svgContent += `<path class="ideal-line" d="${idealPath}"/>`;
+
+  // actual line
+  let actualPath = rows.map((r,i)=> `${i===0?'M':'L'} ${x(r.inputVal)} ${y(r.relPct)}`).join(' ');
+  svgContent += `<path class="actual-line" d="${actualPath}"/>`;
+  rows.forEach(r=>{
+    svgContent += `<circle class="actual-dot" cx="${x(r.inputVal)}" cy="${y(r.relPct)}" r="2.5"/>`;
+  });
+
+  // current selection cursor
+  const cur = rows.find(r=>r.inputVal===currentCode);
+  if(cur){
+    svgContent += `<circle class="cursor-dot" cx="${x(cur.inputVal)}" cy="${y(cur.relPct)}" r="5"/>`;
+  }
+
+  svg.innerHTML = svgContent;
+}
+
+function drawTable(rows, currentCode){
+  const body = document.getElementById('tableBody');
+  body.innerHTML = rows.map(r=>`
+    <tr class="${r.inputVal===currentCode?'current':''}">
+      <td>${r.inputVal}</td>
+      <td>0b${r.hw.toString(2).padStart(5,'0')}</td>
+      <td>${r.gain.toFixed(4)}</td>
+      <td>${(r.relPct>=0?'+':'')+r.relPct.toFixed(1)}%</td>
+      <td>${(r.idealPct>=0?'+':'')+r.idealPct.toFixed(1)}%</td>
+      <td>${(r.err>=0?'+':'')+r.err.toFixed(2)}</td>
+    </tr>
+  `).join('');
+}
+
+// --- Firmware target table (from coworker's tiltGainRange JSON) ---
+const TILT_GAIN_RANGE = [
+  {decV:-32,hex:"0x00",bin:"00000000"},{decV:-31,hex:"0x01",bin:"00000001"},{decV:-30,hex:"0x02",bin:"00000010"},
+  {decV:-29,hex:"0x03",bin:"00000011"},{decV:-28,hex:"0x04",bin:"00000100"},{decV:-27,hex:"0x05",bin:"00000101"},
+  {decV:-26,hex:"0x06",bin:"00000110"},{decV:-25,hex:"0x07",bin:"00000111"},{decV:-24,hex:"0x08",bin:"00001000"},
+  {decV:-23,hex:"0x09",bin:"00001001"},{decV:-22,hex:"0x0A",bin:"00001010"},{decV:-21,hex:"0x0B",bin:"00001011"},
+  {decV:-20,hex:"0x0C",bin:"00001100"},{decV:-19,hex:"0x0D",bin:"00001101"},{decV:-18,hex:"0x0E",bin:"00001110"},
+  {decV:-17,hex:"0x0F",bin:"00001111"},{decV:-16,hex:"0x10",bin:"00010000"},{decV:-15,hex:"0x11",bin:"00010001"},
+  {decV:-14,hex:"0x12",bin:"00010010"},{decV:-13,hex:"0x13",bin:"00010011"},{decV:-12,hex:"0x14",bin:"00010100"},
+  {decV:-11,hex:"0x15",bin:"00010101"},{decV:-10,hex:"0x16",bin:"00010110"},{decV:-9,hex:"0x17",bin:"00010111"},
+  {decV:-8,hex:"0x18",bin:"00011000"},{decV:-7,hex:"0x19",bin:"00011001"},{decV:-6,hex:"0x1A",bin:"00011010"},
+  {decV:-5,hex:"0x1B",bin:"00011011"},{decV:-4,hex:"0x1C",bin:"00011100"},{decV:-3,hex:"0x1D",bin:"00011101"},
+  {decV:-2,hex:"0x1E",bin:"00011110"},{decV:-1,hex:"0x1F",bin:"00011111"},{decV:0,hex:"0x20",bin:"00100000"},
+  {decV:1,hex:"0x21",bin:"00100001"},{decV:2,hex:"0x22",bin:"00100010"},{decV:3,hex:"0x23",bin:"00100011"},
+  {decV:4,hex:"0x24",bin:"00100100"},{decV:5,hex:"0x25",bin:"00100101"},{decV:6,hex:"0x26",bin:"00100110"},
+  {decV:7,hex:"0x27",bin:"00100111"},{decV:8,hex:"0x28",bin:"00101000"},{decV:9,hex:"0x29",bin:"00101001"},
+  {decV:10,hex:"0x2A",bin:"00101010"},{decV:11,hex:"0x2B",bin:"00101011"},{decV:12,hex:"0x2C",bin:"00101100"},
+  {decV:13,hex:"0x2D",bin:"00101101"},{decV:14,hex:"0x2E",bin:"00101110"},{decV:15,hex:"0x2F",bin:"00101111"},
+  {decV:16,hex:"0x30",bin:"00110000"},{decV:17,hex:"0x31",bin:"00110001"},{decV:18,hex:"0x32",bin:"00110010"},
+  {decV:19,hex:"0x33",bin:"00110011"},{decV:20,hex:"0x34",bin:"00110100"},{decV:21,hex:"0x35",bin:"00110101"},
+  {decV:22,hex:"0x36",bin:"00110110"},{decV:23,hex:"0x37",bin:"00110111"},{decV:24,hex:"0x38",bin:"00111000"},
+  {decV:25,hex:"0x39",bin:"00111001"},{decV:26,hex:"0x3A",bin:"00111010"},{decV:27,hex:"0x3B",bin:"00111011"},
+  {decV:28,hex:"0x3C",bin:"00111100"},{decV:29,hex:"0x3D",bin:"00111101"},{decV:30,hex:"0x3E",bin:"00111110"},
+  {decV:31,hex:"0x3F",bin:"00111111"},{decV:32,hex:"0x40",bin:"01000000"}
+];
+
+function groundedResistorNames(hwState){
+  const names = [];
+  for(let i=0;i<5;i++){
+    const bitPos = 4-i;
+    if((hwState>>bitPos)&1) names.push(RES_LABELS[i] + ' (' + resistorValues[i] + '\u03A9)');
+  }
+  return names.length ? names.join(', ') : 'None (all open)';
+}
+
+function renderFirmwareTable(){
+  const rSeries = parseFloat(rSeriesInput.value) || 1500;
+
+  // build the 32 achievable states, sorted ascending by gain (guaranteed monotonic vs hwState by construction)
+  const achievable = [];
+  for(let hw=0; hw<32; hw++){
+    achievable.push({hw, gain: computeGain(hw, rSeries, resistorValues)});
+  }
+  achievable.sort((a,b)=>a.gain-b.gain);
+
+  const minGain = achievable[0].gain;
+  const maxGain = achievable[31].gain;
+  const nominal = (minGain+maxGain)/2;
+  const achievedSpan = ((maxGain-minGain)/nominal)*100;
+
+  document.getElementById('fwSpan').textContent = '±' + (achievedSpan/2).toFixed(2) + '%';
+
+  let worstErr = 0;
+  let lastHw = null;
+  const usedStates = new Set();
+
+  const rows = TILT_GAIN_RANGE.map(entry=>{
+    const targetGain = nominal * (1 + entry.decV/100);
+    // nearest-match search over sorted achievable array
+    let best = achievable[0], bestDiff = Infinity;
+    for(const cand of achievable){
+      const diff = Math.abs(cand.gain - targetGain);
+      if(diff < bestDiff){ bestDiff = diff; best = cand; }
+    }
+    const actualPct = ((best.gain - nominal)/nominal)*100;
+    const errPP = actualPct - entry.decV;
+    if(Math.abs(errPP) > Math.abs(worstErr)) worstErr = errPP;
+    usedStates.add(best.hw);
+    const dup = (lastHw !== null && lastHw === best.hw);
+    lastHw = best.hw;
+    return {...entry, hw: best.hw, gain: best.gain, actualPct, errPP, dup};
+  });
+
+  document.getElementById('fwWorstErr').textContent = (worstErr>=0?'+':'') + worstErr.toFixed(3) + ' pp';
+  document.getElementById('fwUniqueStates').textContent = usedStates.size + ' / 32';
+
+  const covWarn = document.getElementById('fwCoverageWarn');
+  if(achievedSpan/2 < 32){
+    covWarn.style.display = 'block';
+    covWarn.textContent = `⚠ Design only reaches ±${(achievedSpan/2).toFixed(2)}% but the table asks for ±32.00% — the outer codes near ±32 will pile onto the same end-state with growing error. Raise/lower resistor values above to widen the span.`;
+  } else {
+    covWarn.style.display = 'none';
+  }
+
+  const body = document.getElementById('fwTableBody');
+  body.innerHTML = rows.map(r=>`
+    <tr style="${r.dup?'background:rgba(255,180,84,0.06);':''}">
+      <td>${r.decV}</td>
+      <td>${r.hex}</td>
+      <td>${r.bin}</td>
+      <td>0b${r.hw.toString(2).padStart(5,'0')}${r.dup?' <span class="warn-badge" style="color:var(--ideal);" title="Same state as previous row">↔</span>':''}</td>
+      <td style="text-align:left;">${groundedResistorNames(r.hw)}</td>
+      <td>${r.decV>=0?'+':''}${r.decV.toFixed(2)}%</td>
+      <td>${r.actualPct>=0?'+':''}${r.actualPct.toFixed(3)}%</td>
+      <td>${r.gain.toFixed(6)}</td>
+      <td style="${Math.abs(r.errPP)>0.5?'color:var(--warn);':''}">${r.errPP>=0?'+':''}${r.errPP.toFixed(3)}</td>
+      <td>${Math.abs(r.errPP)>0.5?'⚠':''}</td>
+    </tr>
+  `).join('');
+}
+
+document.getElementById('tableToggle').addEventListener('click', function(){
+  const w = document.getElementById('tableWrap');
+  w.classList.toggle('show');
+  this.textContent = w.classList.contains('show') ? 'Hide table' : 'Show table';
+});
+
+codeSlider.addEventListener('input', ()=>{
+  const hw = 31 - (+codeSlider.value);
+  togglesFromHwState(hw);
+  renderAll();
+});
+rSeriesInput.addEventListener('input', renderAll);
+
+document.getElementById('helpBtn').addEventListener('click', ()=>{
+  document.getElementById('helpModal').classList.add('show');
+});
+document.getElementById('helpClose').addEventListener('click', ()=>{
+  document.getElementById('helpModal').classList.remove('show');
+});
+document.getElementById('helpModal').addEventListener('click', (e)=>{
+  if(e.target.id === 'helpModal') document.getElementById('helpModal').classList.remove('show');
+});
+document.addEventListener('keydown', (e)=>{
+  if(e.key === 'Escape') document.getElementById('helpModal').classList.remove('show');
+});
+
+buildLadderUI();
+renderAll();
+</script>
+</body>
+</html>
+
