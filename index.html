@@ -487,6 +487,7 @@
       <div class="subtitle">Series R + 5-bit binary-weighted parallel network → gain vs digital code. Toggle resistors, edit values, watch the curve.</div>
     </div>
     <button id="helpBtn" style="background:var(--panel-2);border:1px solid var(--grid);color:var(--text);font-size:12px;padding:7px 14px;border-radius:5px;cursor:pointer;white-space:nowrap;">? Help</button>
+    <button id="settingsBtn" style="background:var(--panel-2);border:1px solid var(--grid);color:var(--text);font-size:14px;padding:7px 12px;border-radius:5px;cursor:pointer;">⚙</button>
   </div>
 
   <div class="panel" id="netPanel">
@@ -575,18 +576,14 @@
 
   <div class="panel">
     <div class="panel-title">
-      <span>Firmware Precision Table — tiltGainRange (decV −32…+32, 65 codes)</span>
+      <span id="fwPanelTitle">Firmware Precision Table</span>
     </div>
     <div class="subtitle" style="margin-bottom:12px;">
-      Selection curve: which hardware state (0–31, all-grounded → all-open) gets picked for each linear firmware
-      code. This is the same view as the hand-drawn chart — the bow in the curve is what cancels the network's
-      nonlinearity so the output gain steps linearly.
+      Selection curve: which hardware state gets picked for each linear firmware code.
     </div>
     <svg id="selCurve" viewBox="0 0 900 340" style="margin-bottom:16px;"></svg>
     <div class="subtitle" style="margin-bottom:12px;">
-      This is your exact hex/bin/decV array. For each target, this brute-force searches all 32 achievable resistor
-      states and picks the closest one — the assignment is mathematically guaranteed monotonic (no 15/16-style
-      reversals possible), because the 32 achievable gains are themselves strictly monotonic in hardware state.
+      Brute-force nearest-match search across all achievable states — monotonic by construction, no reversals possible.
     </div>
     <div class="readout-row">
       <div class="readout-box">
@@ -594,8 +591,8 @@
         <div class="readout-value small mono" id="fwSpan">-</div>
       </div>
       <div class="readout-box">
-        <div class="readout-label">Target span (fixed)</div>
-        <div class="readout-value small mono">±32.00%</div>
+        <div class="readout-label">Target span</div>
+        <div class="readout-value small mono" id="fwTargetSpan">-</div>
       </div>
       <div class="readout-box">
         <div class="readout-label">Worst-case error</div>
@@ -611,12 +608,47 @@
       <table>
         <thead>
           <tr>
-            <th>decV</th><th>Hex</th><th>Bin (fw)</th><th>HW State</th><th>Grounded resistors</th>
-            <th>Target %</th><th>Actual %</th><th>Actual Vout/Vin</th><th>Error (pp)</th><th></th>
+            <th>decV</th><th>Actual %</th><th>HW State</th><th>Grounded resistors</th>
+            <th>Target %</th><th>Vout/Vin</th><th>Error (pp)</th><th></th>
           </tr>
         </thead>
         <tbody id="fwTableBody"></tbody>
       </table>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h2>⚙ NETWORK SETTINGS</h2>
+      <button class="modal-close" id="settingsClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <h3>Series Resistor</h3>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
+        <input type="number" id="cfg_seriesR" style="width:120px;" step="10">
+        <span style="color:var(--text-dim);font-size:12px;">Ω</span>
+      </div>
+
+      <h3>Target Gain Span</h3>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
+        <span style="color:var(--text-dim);font-size:12px;">±</span>
+        <input type="number" id="cfg_targetSpan" style="width:80px;" step="1" min="1" max="100">
+        <span style="color:var(--text-dim);font-size:12px;">% (firmware table will cover −span to +span in 1% steps)</span>
+      </div>
+
+      <h3>Resistors <span style="font-size:10px;color:var(--text-dim);text-transform:none;letter-spacing:0;">(drag to reorder — count sets bit width)</span></h3>
+      <div id="cfg_resistors" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px;"></div>
+      <div style="display:flex;gap:8px;margin-bottom:16px;">
+        <button id="cfg_addR" style="background:var(--panel-2);border:1px solid var(--grid);color:var(--accent);font-size:12px;padding:6px 12px;border-radius:4px;cursor:pointer;">+ Add resistor</button>
+        <button id="cfg_resetDefaults" style="background:none;border:1px solid var(--grid);color:var(--text-dim);font-size:12px;padding:6px 12px;border-radius:4px;cursor:pointer;">Reset to defaults</button>
+      </div>
+
+      <div style="display:flex;gap:8px;padding-top:12px;border-top:1px solid var(--grid);">
+        <button id="cfg_apply" style="background:var(--accent);border:none;color:#000;font-size:13px;font-weight:700;padding:10px 22px;border-radius:5px;cursor:pointer;flex:1;">Apply</button>
+        <button id="cfg_cancel" style="background:none;border:1px solid var(--grid);color:var(--text-dim);font-size:13px;padding:10px 22px;border-radius:5px;cursor:pointer;">Cancel</button>
+      </div>
     </div>
   </div>
 </div>
@@ -707,12 +739,48 @@ Relative % = (Gain − Nominal) / Nominal × 100</pre>
 </div>
 
 <script>
-const RES_LABELS = ['R176','R171','R170','R169','R168'];
-const RES_DEFAULTS = [4020, 8060, 16200, 32400, 63400];
-// bit 4 = R176 (highest weight / lowest resistance) ... bit 0 = R168 (lowest weight / highest resistance)
+// --- Default config (your hardware) ---
+const FACTORY_DEFAULTS = {
+  seriesR: 1800,
+  targetSpan: 32,
+  resistors: [
+    {label:'R176', value:4020},
+    {label:'R171', value:8060},
+    {label:'R170', value:16200},
+    {label:'R169', value:32400},
+    {label:'R168', value:63400},
+  ]
+};
 
-let resistorValues = [...RES_DEFAULTS];
-let resistorOn = [false,false,false,false,false]; // true = switched into circuit (to ground)
+// Load from localStorage or fall back to factory defaults
+function loadConfig(){
+  try {
+    const saved = localStorage.getItem('gainladder_config');
+    if(saved) return JSON.parse(saved);
+  } catch(e){}
+  return JSON.parse(JSON.stringify(FACTORY_DEFAULTS));
+}
+function saveConfig(cfg){
+  try { localStorage.setItem('gainladder_config', JSON.stringify(cfg)); } catch(e){}
+}
+
+let CFG = loadConfig();
+
+// Derived working arrays (rebuilt whenever CFG changes)
+let RES_LABELS   = CFG.resistors.map(r=>r.label);
+let resistorValues = CFG.resistors.map(r=>r.value);
+let resistorOn   = CFG.resistors.map(()=>false);
+const numBits    = () => CFG.resistors.length;
+const maxStates  = () => 1 << numBits();
+const topBit     = () => numBits() - 1;
+
+function applyConfig(){
+  RES_LABELS     = CFG.resistors.map(r=>r.label);
+  resistorValues = CFG.resistors.map(r=>r.value);
+  resistorOn     = CFG.resistors.map(()=>false);
+  rSeriesInput.value = CFG.seriesR;
+  saveConfig(CFG);
+}
 
 const ladderEl = document.getElementById('ladder');
 const rSeriesInput = document.getElementById('rSeries');
@@ -726,7 +794,7 @@ function buildLadderUI(){
     node.innerHTML = `
       <div class="resnode-head">
         <span class="resnode-name">${name}</span>
-        <span class="resnode-bit">bit ${4-i}</span>
+        <span class="resnode-bit">bit ${topBit()-i}</span>
       </div>
       <button class="toggle" data-idx="${i}"></button>
       <input type="number" data-val-idx="${i}" value="${resistorValues[i]}" step="10" style="margin-top:10px;">
@@ -757,28 +825,28 @@ function buildLadderUI(){
 // weight order per RES_LABELS: index0=highest weight(bit4) ... index4=lowest weight(bit0)
 function hwStateFromToggles(){
   let s = 0;
-  for(let i=0;i<5;i++){
-    const bitPos = 4-i; // R176->bit4 ... R168->bit0
+  for(let i=0;i<numBits();i++){
+    const bitPos = topBit()-i;
     if(resistorOn[i]) s |= (1<<bitPos);
   }
   return s;
 }
 function togglesFromHwState(hw){
-  for(let i=0;i<5;i++){
-    const bitPos = 4-i;
+  for(let i=0;i<numBits();i++){
+    const bitPos = topBit()-i;
     resistorOn[i] = !!((hw>>bitPos)&1);
   }
 }
 function syncFromToggles(){
   const hw = hwStateFromToggles();
-  const inputVal = 31 - hw;
+  const inputVal = (maxStates()-1) - hw;
   codeSlider.value = inputVal;
 }
 
 function computeGain(hwState, rSeries, rParallel){
   let invReq = 0;
-  for(let i=0;i<5;i++){
-    const bitPos = 4-i;
+  for(let i=0;i<rParallel.length;i++){
+    const bitPos = (rParallel.length-1)-i;
     if((hwState>>bitPos)&1) invReq += 1/rParallel[i];
   }
   if(invReq > 0){
@@ -789,10 +857,11 @@ function computeGain(hwState, rSeries, rParallel){
 }
 
 function fullSweep(){
-  const rSeries = parseFloat(rSeriesInput.value) || 1500;
+  const rSeries = parseFloat(rSeriesInput.value) || CFG.seriesR;
   const rows = [];
-  for(let inputVal=0; inputVal<32; inputVal++){
-    const hw = 31 - inputVal;
+  const total = maxStates();
+  for(let inputVal=0; inputVal<total; inputVal++){
+    const hw = (total-1) - inputVal;
     const gain = computeGain(hw, rSeries, resistorValues);
     rows.push({inputVal, hw, gain});
   }
@@ -800,16 +869,21 @@ function fullSweep(){
 }
 
 function renderAll(){
-  const rSeries = parseFloat(rSeriesInput.value) || 1500;
+  const rSeries = parseFloat(rSeriesInput.value) || CFG.seriesR;
   const rows = fullSweep();
+  const total = maxStates();
+
+  // update slider max
+  codeSlider.max = total - 1;
+
   const minGain = rows[0].gain;
-  const maxGain = rows[31].gain;
+  const maxGain = rows[total-1].gain;
   const nominal = (minGain+maxGain)/2;
   const spanPct = ((maxGain-minGain)/nominal)*100;
 
   // current selection (from slider, which drives hw state / toggles)
   const inputVal = +codeSlider.value;
-  const hw = 31 - inputVal;
+  const hw = (total-1) - inputVal;
   togglesFromHwState(hw);
   const curGain = computeGain(hw, rSeries, resistorValues);
   const curPct = ((curGain-nominal)/nominal)*100;
@@ -825,7 +899,7 @@ function renderAll(){
   document.getElementById('codeLabel').textContent = `code = ${inputVal}`;
   document.getElementById('gainVal').textContent = curGain.toFixed(4);
   document.getElementById('gainPct').textContent = (curPct>=0?'+':'') + curPct.toFixed(1) + '%';
-  document.getElementById('hwState').textContent = hw.toString(2).padStart(5,'0');
+  document.getElementById('hwState').textContent = hw.toString(2).padStart(numBits(),'0');
   document.getElementById('minGain').textContent = minGain.toFixed(4);
   document.getElementById('maxGain').textContent = maxGain.toFixed(4);
   document.getElementById('nomSpan').textContent = nominal.toFixed(4) + ' / ±' + (spanPct/2).toFixed(1) + '%';
@@ -848,7 +922,7 @@ function renderAll(){
   let maxErr = 0;
   const errRows = rows.map(r=>{
     const relPct = ((r.gain-nominal)/nominal)*100;
-    const idealPct = -spanPct/2 + (spanPct)*(r.inputVal/31);
+    const idealPct = -spanPct/2 + (spanPct)*(r.inputVal/(total-1));
     const err = relPct - idealPct;
     if(Math.abs(err) > Math.abs(maxErr)) maxErr = err;
     return {...r, relPct, idealPct, err};
@@ -960,17 +1034,24 @@ function groundedResistorNames(hwState){
 }
 
 function renderFirmwareTable(){
-  const rSeries = parseFloat(rSeriesInput.value) || 1500;
+  const rSeries = parseFloat(rSeriesInput.value) || CFG.seriesR;
+  const targetSpan = CFG.targetSpan;
+  const total = maxStates();
 
-  // build the 32 achievable states, sorted ascending by gain (guaranteed monotonic vs hwState by construction)
+  // update panel labels
+  document.getElementById('fwTargetSpan').textContent = '±' + targetSpan.toFixed(2) + '%';
+  document.getElementById('fwPanelTitle').textContent =
+    `Firmware Precision Table — ${total} hardware states, ±${targetSpan}% target`;
+
+  // build achievable states
   const achievable = [];
-  for(let hw=0; hw<32; hw++){
+  for(let hw=0; hw<total; hw++){
     achievable.push({hw, gain: computeGain(hw, rSeries, resistorValues)});
   }
   achievable.sort((a,b)=>a.gain-b.gain);
 
   const minGain = achievable[0].gain;
-  const maxGain = achievable[31].gain;
+  const maxGain = achievable[total-1].gain;
   const nominal = (minGain+maxGain)/2;
   const achievedSpan = ((maxGain-minGain)/nominal)*100;
 
@@ -980,9 +1061,14 @@ function renderFirmwareTable(){
   let lastHw = null;
   const usedStates = new Set();
 
-  const rows = TILT_GAIN_RANGE.map(entry=>{
+  // Generate target codes dynamically from targetSpan: decV from -targetSpan to +targetSpan (integer steps)
+  const targetCodes = [];
+  for(let decV=-targetSpan; decV<=targetSpan; decV++){
+    targetCodes.push({decV, label: (decV>=0?'+':'')+decV+'%'});
+  }
+
+  const rows = targetCodes.map(entry=>{
     const targetGain = nominal * (1 + entry.decV/100);
-    // nearest-match search over sorted achievable array
     let best = achievable[0], bestDiff = Infinity;
     for(const cand of achievable){
       const diff = Math.abs(cand.gain - targetGain);
@@ -998,12 +1084,12 @@ function renderFirmwareTable(){
   });
 
   document.getElementById('fwWorstErr').textContent = (worstErr>=0?'+':'') + worstErr.toFixed(3) + ' pp';
-  document.getElementById('fwUniqueStates').textContent = usedStates.size + ' / 32';
+  document.getElementById('fwUniqueStates').textContent = usedStates.size + ' / ' + total;
 
   const covWarn = document.getElementById('fwCoverageWarn');
-  if(achievedSpan/2 < 32){
+  if(achievedSpan/2 < targetSpan){
     covWarn.style.display = 'block';
-    covWarn.textContent = `⚠ Design only reaches ±${(achievedSpan/2).toFixed(2)}% but the table asks for ±32.00% — the outer codes near ±32 will pile onto the same end-state with growing error. Raise/lower resistor values above to widen the span.`;
+    covWarn.textContent = `⚠ Design only reaches ±${(achievedSpan/2).toFixed(2)}% but the table asks for ±${targetSpan.toFixed(2)}% — outer codes will pile onto the same end-state with growing error.`;
   } else {
     covWarn.style.display = 'none';
   }
@@ -1012,12 +1098,10 @@ function renderFirmwareTable(){
   body.innerHTML = rows.map(r=>`
     <tr style="${r.dup?'background:rgba(255,180,84,0.06);':''}">
       <td>${r.decV}</td>
-      <td>${r.hex}</td>
-      <td>${r.bin}</td>
-      <td>0b${r.hw.toString(2).padStart(5,'0')}${r.dup?' <span class="warn-badge" style="color:var(--ideal);" title="Same state as previous row">↔</span>':''}</td>
+      <td>${r.actualPct>=0?'+':''}${r.actualPct.toFixed(3)}%</td>
+      <td>0b${r.hw.toString(2).padStart(numBits(),'0')}${r.dup?' <span class="warn-badge" style="color:var(--ideal);" title="Same state as previous row">↔</span>':''}</td>
       <td style="text-align:left;">${groundedResistorNames(r.hw)}</td>
       <td>${r.decV>=0?'+':''}${r.decV.toFixed(2)}%</td>
-      <td>${r.actualPct>=0?'+':''}${r.actualPct.toFixed(3)}%</td>
       <td>${r.gain.toFixed(6)}</td>
       <td style="${Math.abs(r.errPP)>0.5?'color:var(--warn);':''}">${r.errPP>=0?'+':''}${r.errPP.toFixed(3)}</td>
       <td>${Math.abs(r.errPP)>0.5?'⚠':''}</td>
@@ -1111,6 +1195,91 @@ codeSlider.addEventListener('input', ()=>{
   renderAll();
 });
 rSeriesInput.addEventListener('input', renderAll);
+
+// --- Settings modal ---
+function openSettings(){
+  // populate fields from current CFG
+  document.getElementById('cfg_seriesR').value = CFG.seriesR;
+  document.getElementById('cfg_targetSpan').value = CFG.targetSpan;
+  buildCfgResistorList();
+  document.getElementById('settingsModal').classList.add('show');
+}
+function closeSettings(){
+  document.getElementById('settingsModal').classList.remove('show');
+}
+
+function buildCfgResistorList(){
+  const container = document.getElementById('cfg_resistors');
+  container.innerHTML = CFG.resistors.map((r,i)=>`
+    <div style="display:flex;align-items:center;gap:8px;" data-ri="${i}">
+      <span style="color:var(--text-dim);font-size:11px;width:14px;">${i+1}</span>
+      <input type="text" value="${r.label}" data-label="${i}"
+        style="width:72px;font-size:12px;" placeholder="Label">
+      <input type="number" value="${r.value}" data-rval="${i}"
+        style="width:90px;font-size:12px;" step="10" min="1">
+      <span style="color:var(--text-dim);font-size:11px;">Ω</span>
+      ${CFG.resistors.length > 1
+        ? `<button data-del="${i}" style="background:none;border:none;color:var(--warn);font-size:14px;cursor:pointer;padding:2px 6px;">×</button>`
+        : ''}
+    </div>
+  `).join('');
+
+  container.querySelectorAll('[data-del]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const idx = +btn.dataset.del;
+      CFG.resistors.splice(idx,1);
+      buildCfgResistorList();
+    });
+  });
+}
+
+document.getElementById('settingsBtn').addEventListener('click', openSettings);
+document.getElementById('settingsClose').addEventListener('click', closeSettings);
+document.getElementById('cfg_cancel').addEventListener('click', closeSettings);
+document.getElementById('settingsModal').addEventListener('click',(e)=>{
+  if(e.target.id==='settingsModal') closeSettings();
+});
+
+document.getElementById('cfg_addR').addEventListener('click',()=>{
+  CFG.resistors.push({label:'R'+(CFG.resistors.length+1), value:10000});
+  buildCfgResistorList();
+});
+
+document.getElementById('cfg_resetDefaults').addEventListener('click',()=>{
+  CFG = JSON.parse(JSON.stringify(FACTORY_DEFAULTS));
+  document.getElementById('cfg_seriesR').value = CFG.seriesR;
+  document.getElementById('cfg_targetSpan').value = CFG.targetSpan;
+  buildCfgResistorList();
+});
+
+document.getElementById('cfg_apply').addEventListener('click',()=>{
+  // read values from form back into CFG
+  const sr = parseFloat(document.getElementById('cfg_seriesR').value);
+  const ts = parseFloat(document.getElementById('cfg_targetSpan').value);
+  if(!isNaN(sr) && sr > 0) CFG.seriesR = sr;
+  if(!isNaN(ts) && ts > 0) CFG.targetSpan = Math.round(ts);
+
+  const container = document.getElementById('cfg_resistors');
+  container.querySelectorAll('[data-label]').forEach(inp=>{
+    const i = +inp.dataset.label;
+    if(CFG.resistors[i]) CFG.resistors[i].label = inp.value.trim() || ('R'+(i+1));
+  });
+  container.querySelectorAll('[data-rval]').forEach(inp=>{
+    const i = +inp.dataset.rval;
+    const v = parseFloat(inp.value);
+    if(CFG.resistors[i] && !isNaN(v) && v > 0) CFG.resistors[i].value = v;
+  });
+
+  applyConfig();
+  buildLadderUI();
+  renderAll();
+  closeSettings();
+});
+
+// Show settings on very first load (no saved config)
+if(!localStorage.getItem('gainladder_config')){
+  setTimeout(openSettings, 400);
+}
 
 document.getElementById('helpBtn').addEventListener('click', ()=>{
   document.getElementById('helpModal').classList.add('show');
