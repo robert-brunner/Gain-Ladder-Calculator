@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Gain Ladder — Resistor Network Calculator</title>
 <style>
   :root{
@@ -315,6 +316,161 @@
   .modal-body img{
     width:100%;border-radius:5px;border:1px solid var(--grid);margin:6px 0 14px;
   }
+
+  /* ── Range slider touch-friendliness ── */
+  input[type=range]{
+    -webkit-appearance:none;
+    width:100%;
+    height:6px;
+    background:var(--grid);
+    border-radius:3px;
+    outline:none;
+    cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;
+    width:24px;height:24px;
+    border-radius:50%;
+    background:var(--accent);
+    cursor:pointer;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:24px;height:24px;
+    border-radius:50%;
+    background:var(--accent);
+    border:none;
+    cursor:pointer;
+  }
+
+  /* ── Network config collapsible ── */
+  .net-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    cursor:pointer;
+    user-select:none;
+    gap:10px;
+  }
+  .net-header-left{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    flex-wrap:wrap;
+    flex:1;
+  }
+  .net-chevron{
+    font-size:16px;
+    color:var(--text-dim);
+    transition:transform .2s;
+    flex-shrink:0;
+  }
+  .net-chevron.open{transform:rotate(180deg);}
+  .net-body{
+    overflow:hidden;
+    max-height:0;
+    transition:max-height .3s ease;
+  }
+  .net-body.open{max-height:600px;}
+
+  /* ── Resistor status tabs ── */
+  .res-tabs{display:flex;gap:5px;flex-wrap:wrap;}
+  .res-tab{
+    font-size:10px;
+    font-family:'Consolas','SF Mono',monospace;
+    padding:2px 7px;
+    border-radius:10px;
+    border:1px solid var(--grid);
+    color:var(--text-dim);
+    background:var(--panel-2);
+    transition:all .15s;
+    white-space:nowrap;
+  }
+  .res-tab.on{
+    border-color:var(--on);
+    color:var(--on);
+    background:rgba(87,184,255,0.1);
+    box-shadow:0 0 6px -2px var(--on);
+  }
+
+  /* ── Scrollable table wrapper ── */
+  .table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+
+  /* ── Mobile breakpoint ── */
+  @media(max-width:600px){
+    body{padding:12px 10px;}
+
+    h1{font-size:13px;letter-spacing:1px;}
+    .subtitle{font-size:11px;margin-bottom:12px;}
+
+    .panel{padding:12px 12px;}
+    .panel-title{font-size:10px;flex-wrap:wrap;gap:6px;}
+
+    /* header: stack title + help button */
+    div[style*="justify-content:space-between"]{
+      flex-direction:column;
+      gap:8px;
+    }
+    #helpBtn{align-self:flex-start;}
+
+    /* series resistor row: allow wrapping */
+    .series-row{flex-wrap:wrap;gap:6px;}
+    .series-row label{min-width:unset;width:100%;}
+    .series-row input{width:120px;}
+
+    /* resistor nodes: 2 per row on mobile */
+    .ladder{gap:6px;}
+    .resnode{min-width:calc(50% - 3px);flex:1 1 calc(50% - 3px);}
+    .resnode input[type=number]{font-size:12px;}
+
+    /* toggle bigger hit target */
+    .toggle{width:44px;height:26px;}
+    .toggle::after{width:20px;height:20px;}
+    .toggle.on::after{left:22px;}
+
+    /* readout boxes: 2-col grid */
+    .readout-row{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:8px;
+      margin-top:10px;
+    }
+    .readout-box{padding:10px 10px;}
+    .readout-value{font-size:18px;}
+    .readout-value.small{font-size:13px;}
+    .readout-label{font-size:9px;}
+
+    /* gauge labels smaller */
+    .gauge-labels{font-size:9px;}
+    .gauge{height:28px;}
+
+    /* legend wrap */
+    .legend{flex-wrap:wrap;gap:10px;}
+
+    /* tables: horizontal scroll */
+    table{font-size:10px;}
+    th,td{padding:3px 5px;}
+    #tableWrap{max-height:260px;}
+
+    /* modal: full screen on mobile */
+    .modal-overlay{padding:0;}
+    .modal-box{
+      max-width:100%;
+      width:100%;
+      max-height:100vh;
+      border-radius:0;
+      border-left:none;
+      border-right:none;
+    }
+    .modal-header{padding:12px 14px;}
+    .modal-header h2{font-size:12px;}
+    .modal-body{padding:14px 14px 20px;font-size:12px;}
+    .modal-body .stat-line{font-size:10px;flex-wrap:wrap;gap:4px;}
+    .modal-body pre{font-size:10px;}
+
+    /* selection curve SVG: shorter on mobile */
+    #selCurve{max-height:220px;}
+    #chart{max-height:220px;}
+  }
 </style>
 </head>
 <body>
@@ -326,14 +482,23 @@
     </div>
     <button id="helpBtn" style="background:var(--panel-2);border:1px solid var(--grid);color:var(--text);font-size:12px;padding:7px 14px;border-radius:5px;cursor:pointer;white-space:nowrap;">? Help</button>
   </div>
-  <div class="panel">
-    <div class="panel-title">Network Configuration</div>
-    <div class="series-row">
-      <label>Series resistor</label>
-      <input type="number" id="rSeries" value="1800" step="10">
-      <span class="resnode-unit">Ω</span>
+
+  <div class="panel" id="netPanel">
+    <div class="net-header" id="netToggle">
+      <div class="net-header-left">
+        <span class="panel-title" style="margin-bottom:0;">Network Configuration</span>
+        <div class="res-tabs" id="resTabs"></div>
+      </div>
+      <div class="net-chevron" id="netChevron">▾</div>
     </div>
-    <div class="ladder" id="ladder"></div>
+    <div class="net-body" id="netBody">
+      <div class="series-row" style="margin-top:14px;">
+        <label>Series resistor</label>
+        <input type="number" id="rSeries" value="1800" step="10">
+        <span class="resnode-unit">Ω</span>
+      </div>
+      <div class="ladder" id="ladder"></div>
+    </div>
   </div>
 
   <div class="panel">
@@ -393,10 +558,12 @@
       </div>
     </div>
     <div id="tableWrap">
+      <div class="table-scroll">
       <table>
         <thead><tr><th>Code</th><th>HW State</th><th>Gain</th><th>Rel %</th><th>Ideal %</th><th>Error (pts)</th></tr></thead>
         <tbody id="tableBody"></tbody>
       </table>
+      </div>
     </div>
   </div>
 
@@ -404,6 +571,12 @@
     <div class="panel-title">
       <span>Firmware Precision Table — tiltGainRange (decV −32…+32, 65 codes)</span>
     </div>
+    <div class="subtitle" style="margin-bottom:12px;">
+      Selection curve: which hardware state (0–31, all-grounded → all-open) gets picked for each linear firmware
+      code. This is the same view as the hand-drawn chart — the bow in the curve is what cancels the network's
+      nonlinearity so the output gain steps linearly.
+    </div>
+    <svg id="selCurve" viewBox="0 0 900 340" style="margin-bottom:16px;"></svg>
     <div class="subtitle" style="margin-bottom:12px;">
       This is your exact hex/bin/decV array. For each target, this brute-force searches all 32 achievable resistor
       states and picks the closest one — the assignment is mathematically guaranteed monotonic (no 15/16-style
@@ -428,7 +601,7 @@
       </div>
     </div>
     <div id="fwCoverageWarn" class="subtitle" style="color:var(--warn);margin-top:10px;display:none;"></div>
-    <div style="max-height:480px;overflow-y:auto;margin-top:14px;">
+    <div class="table-scroll" style="max-height:480px;overflow-y:auto;margin-top:14px;">
       <table>
         <thead>
           <tr>
@@ -528,8 +701,6 @@ Relative % = (Gain − Nominal) / Nominal × 100</pre>
 </div>
 
 <script>
-
-//Created by Robert Brunner
 const RES_LABELS = ['R176','R171','R170','R169','R168'];
 const RES_DEFAULTS = [4020, 8060, 16200, 32400, 63400];
 // bit 4 = R176 (highest weight / lowest resistance) ... bit 0 = R168 (lowest weight / highest resistance)
@@ -643,6 +814,7 @@ function renderAll(){
     btn.classList.toggle('on', resistorOn[idx]);
     btn.closest('.resnode').classList.toggle('on', resistorOn[idx]);
   });
+  updateResTabs();
 
   document.getElementById('codeLabel').textContent = `code = ${inputVal}`;
   document.getElementById('gainVal').textContent = curGain.toFixed(4);
@@ -845,6 +1017,63 @@ function renderFirmwareTable(){
       <td>${Math.abs(r.errPP)>0.5?'⚠':''}</td>
     </tr>
   `).join('');
+
+  drawSelectionCurve(rows);
+}
+
+function drawSelectionCurve(rows){
+  // x = linear firmware code index (0..64, i.e. decV -32..+32), y = selected hardware state expressed
+  // as "steps open" (31 - hw grounded-count ordering isn't right; use rank of gain instead).
+  // Coworker's paper chart: y axis 0 (all grounded / -30%) at top, 31 (all open / +30%) at bottom,
+  // x = linear input. We plot y as the hw state's gain-rank so the curve matches his drawing shape.
+  const svg = document.getElementById('selCurve');
+  if(!svg) return;
+  const W=900,H=340,padL=50,padR=20,padT=18,padB=34;
+  const plotW=W-padL-padR, plotH=H-padT-padB;
+
+  // rank each row's hw state by its gain among the 32 achievable (0 = lowest gain = all grounded)
+  const rSeries = parseFloat(rSeriesInput.value) || 1500;
+  const stateGains = [];
+  for(let hw=0; hw<32; hw++) stateGains.push({hw, gain: computeGain(hw, rSeries, resistorValues)});
+  stateGains.sort((a,b)=>a.gain-b.gain);
+  const rankOf = {};
+  stateGains.forEach((s,i)=>{ rankOf[s.hw] = i; });
+
+  const n = rows.length; // 65
+  const x = i => padL + (i/(n-1))*plotW;
+  const y = rank => padT + (rank/31)*plotH; // rank 0 (min gain / -30%) at TOP like his paper
+
+  let c = '';
+  // grid
+  for(let g=0; g<=31; g+=31/31*4){ } // no-op
+  for(let ry=0; ry<=31; ry+=4){
+    const yy = y(ry);
+    c += `<line class="grid-line" x1="${padL}" y1="${yy}" x2="${W-padR}" y2="${yy}"/>`;
+    c += `<text class="axis-text" x="${padL-6}" y="${yy+3}" text-anchor="end">${ry}</text>`;
+  }
+  for(let cx=0; cx<n; cx+=8){
+    const xx = x(cx);
+    c += `<line class="grid-line" x1="${xx}" y1="${padT}" x2="${xx}" y2="${H-padB}"/>`;
+    c += `<text class="axis-text" x="${xx}" y="${H-padB+16}" text-anchor="middle">${rows[cx].decV}</text>`;
+  }
+  c += `<line class="axis-line" x1="${padL}" y1="${padT}" x2="${padL}" y2="${H-padB}"/>`;
+  c += `<line class="axis-line" x1="${padL}" y1="${H-padB}" x2="${W-padR}" y2="${H-padB}"/>`;
+  c += `<text class="axis-text" x="${W/2}" y="${H-4}" text-anchor="middle">decV (linear firmware code)</text>`;
+  c += `<text class="axis-text" x="${padL-38}" y="${padT+8}" text-anchor="start">state rank: 0 = all grounded (−span)</text>`;
+  c += `<text class="axis-text" x="${padL-38}" y="${H-padB-4}" text-anchor="start">31 = all open (+span)</text>`;
+
+  // step curve of selected state rank
+  let path = '';
+  rows.forEach((r,i)=>{
+    const rk = rankOf[r.hw];
+    path += `${i===0?'M':'L'} ${x(i)} ${y(rk)} `;
+  });
+  c += `<path class="actual-line" d="${path}"/>`;
+  rows.forEach((r,i)=>{
+    c += `<circle class="actual-dot" cx="${x(i)}" cy="${y(rankOf[r.hw])}" r="2.2"/>`;
+  });
+
+  svg.innerHTML = c;
 }
 
 document.getElementById('tableToggle').addEventListener('click', function(){
@@ -852,6 +1081,23 @@ document.getElementById('tableToggle').addEventListener('click', function(){
   w.classList.toggle('show');
   this.textContent = w.classList.contains('show') ? 'Hide table' : 'Show table';
 });
+
+// --- Network config dropdown ---
+const netToggle = document.getElementById('netToggle');
+const netBody   = document.getElementById('netBody');
+const netChevron= document.getElementById('netChevron');
+
+netToggle.addEventListener('click', ()=>{
+  const open = netBody.classList.toggle('open');
+  netChevron.classList.toggle('open', open);
+});
+
+function updateResTabs(){
+  const tabsEl = document.getElementById('resTabs');
+  tabsEl.innerHTML = RES_LABELS.map((name, i) =>
+    `<span class="res-tab${resistorOn[i]?' on':''}">${name}</span>`
+  ).join('');
+}
 
 codeSlider.addEventListener('input', ()=>{
   const hw = 31 - (+codeSlider.value);
@@ -878,4 +1124,3 @@ renderAll();
 </script>
 </body>
 </html>
-
